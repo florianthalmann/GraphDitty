@@ -21,12 +21,8 @@ from CSMSSMTools import getCSM, getCSMCosine
 from Laplacian import *
 from SimilarityFusion import getW, doSimilarityFusionWs
 from SongStructure import *
-<<<<<<< HEAD
 from multiprocessing import Pool as PPool, cpu_count
-=======
-from multiprocessing import Pool as PPool
 import json
->>>>>>> 54de7a8e89021d6290cdf5823c6b8fe905e23ed7
 
 ## Paths to dataset
 JAMS_DIR = '../SALAMI/salami-data-public-jams-multi/'
@@ -107,7 +103,7 @@ def get_inter_anno_agreement(NThreads = 12):
     plt.ylabel("Probability Density")
     plt.show()
 
-def compute_features(num, multianno_only = False, recompute=True):
+def compute_features(num, multianno_only = False, recompute=False):
     """
     Compute precision, recall, and l-measure for a set of features on a particular
     song in the SALAMI dataset, and save the results to a file called "results.mat"
