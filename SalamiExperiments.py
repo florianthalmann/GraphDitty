@@ -21,7 +21,12 @@ from CSMSSMTools import getCSM, getCSMCosine
 from Laplacian import *
 from SimilarityFusion import getW, doSimilarityFusionWs
 from SongStructure import *
+<<<<<<< HEAD
 from multiprocessing import Pool as PPool, cpu_count
+=======
+from multiprocessing import Pool as PPool
+import json
+>>>>>>> 54de7a8e89021d6290cdf5823c6b8fe905e23ed7
 
 ## Paths to dataset
 JAMS_DIR = '../SALAMI/salami-data-public-jams-multi/'
@@ -158,6 +163,9 @@ def compute_features(num, multianno_only = False, recompute=True):
     
     return
 
+    json.dump({'intervals':{name:[[x.tolist() for x in res['intervals_hier']] for res in alllabels[name]] for name in alllabels}, 
+           'labels':{name:[res['labels_hier'] for res in alllabels[name]] for name in alllabels}}, open(hierfilename, "w"))
+
     ## Step 3: Compare to annotators and save results
     ret = {name:[] for name in Ws}
     print('NUM ANNOS', len(jam.annotations), int(len(jam.annotations)/4))
@@ -221,7 +229,7 @@ def aggregate_experiments_results(precomputed_name = "", multianno_only = False)
     the annotator agreements
     """
     # Step 1: Extract feature-based agreements
-    names = ['MFCCs', 'Chromas', 'Tempogram', 'Crema', 'Fused Tgram/Crema', 'Fused MFCC/Chroma', 'Fused', 'interanno']
+    names = ['MFCCs', 'Chromas', 'Tempogram', 'Crema', 'Fused Tgram_Crema', 'Fused MFCC_Chroma', 'Fused', 'interanno']
     prls = {name:np.zeros((0, 3)) for name in names} # Dictionary of precison, recall, and l-scores
     idxs = [] #Indices of 
 

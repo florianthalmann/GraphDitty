@@ -229,7 +229,7 @@ def getFusedSimilarity(filename, sr, hop_length, win_fac, wins_per_block, K, reg
         DChordPitch = getCSMCosine(XChordPitch, XChordPitch)
 
     ## Step 5: Run similarity network fusion
-    FeatureNames = ['MFCCs', 'Chromas', 'Tempogram']
+    FeatureNames = ['MFCCs', 'Chromas']
     Ds = [DMFCC, DChroma, DTempogram]
     if do_crema:
         FeatureNames.append('Crema')
@@ -247,7 +247,8 @@ def getFusedSimilarity(filename, sr, hop_length, win_fac, wins_per_block, K, reg
     # Do fusion on all features
     Ws = [getW(D, pK) for D in Ds]
     if REC_SMOOTH > 0:
-        df = librosa.segment.timelag_filter(scipy.ndimage.median_filter)
+        from scipy.ndimage import median_filter
+        df = librosa.segment.timelag_filter(median_filter)
         Ws = [df(W, size=(1, REC_SMOOTH)) for W in Ws]
 
     WFused = doSimilarityFusionWs(Ws, K=pK, niters=niters, \
@@ -259,17 +260,17 @@ def getFusedSimilarity(filename, sr, hop_length, win_fac, wins_per_block, K, reg
         WsDict[n] = W
     WsDict['Fused'] = WFused
     # Do fusion with only Chroma and MFCC
-    WsDict['Fused MFCC/Chroma'] = doSimilarityFusionWs(Ws[0:2], K=pK, niters=niters, \
-        reg_diag=reg_diag, reg_neighbs=reg_neighbs)
+    #WsDict['Fused MFCC/Chroma'] = doSimilarityFusionWs(Ws[0:2], K=pK, niters=niters, \
+    #    reg_diag=reg_diag, reg_neighbs=reg_neighbs)
     if do_crema:
         # Do fusion with tempograms and Crema if Crema is available
-        WsDict['Fused Tgram/Crema'] = doSimilarityFusionWs(Ws[2::], K=pK, niters=niters, \
+        WsDict['Fused Tgram_Crema'] = doSimilarityFusionWs(Ws[2::], K=pK, niters=niters, \
             reg_diag=reg_diag, reg_neighbs=reg_neighbs)
         # Do fusion with MFCC and Crema
-        WsDict['Fused MFCC/Crema'] = doSimilarityFusionWs([Ws[0], Ws[-1]], K=pK, niters=niters, \
+        WsDict['Fused MFCC_Crema'] = doSimilarityFusionWs([Ws[0], Ws[-1]], K=pK, niters=niters, \
             reg_diag=reg_diag, reg_neighbs=reg_neighbs)
         # Do fusion with MFCC, Chroma, and Crema
-        WsDict['Fused MFCC/Chroma/Crema'] = doSimilarityFusionWs([Ws[0], Ws[1], Ws[-1]], K=pK, niters=niters, \
+        WsDict['Fused MFCC_Chroma_Crema'] = doSimilarityFusionWs([Ws[0], Ws[1], Ws[-1]], K=pK, niters=niters, \
             reg_diag=reg_diag, reg_neighbs=reg_neighbs)
     if plot_result:
         plotFusionResults(WsDict, {}, {}, times, win_fac)
