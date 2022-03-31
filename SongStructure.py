@@ -17,7 +17,7 @@ from SongStructureGUI import saveResultsJSON
 import subprocess
 
 REC_SMOOTH = 9
-MANUAL_AUDIO_LOAD = True
+MANUAL_AUDIO_LOAD = False
 FFMPEG_BINARY = "ffmpeg"
 
 def plotFusionResults(Ws, vs, alllabels, times, win_fac, intervals_hier = [], labels_hier = []):
@@ -49,6 +49,7 @@ def plotFusionResults(Ws, vs, alllabels, times, win_fac, intervals_hier = [], la
     fac = 0.7
     fig = plt.figure(figsize=(fac*32, fac*8*nrows))
     time_uniform = win_fac >= 0
+    np.seterr(divide = 'ignore') 
     for i, name in enumerate(Ws):
         W = Ws[name]
         floor = np.quantile(W.flatten(), 0.01)
@@ -156,9 +157,12 @@ def getFusedSimilarity(filename, sr, hop_length, win_fac, wins_per_block, K, reg
         # Compute features in intervals which are subdivided beats
         # by a factor of |win_fac|
         C = np.abs(librosa.cqt(y=y, sr=sr))
-        _, beats = librosa.beat.beat_track(y=y, sr=sr, trim=False, start_bpm=240)
+        _, beats = librosa.beat.beat_track(y=y, sr=sr, trim=False)#, start_bpm=240)
         intervals = librosa.util.fix_frames(beats, x_max=C.shape[1])
-        intervals = librosa.segment.subsegment(C, intervals, n_segments=abs(win_fac))
+        try:
+            intervals = librosa.segment.subsegment(C, intervals, n_segments=abs(win_fac))
+        except ValueError:
+            print("Didn't manage to subsegment")
 
     ## Step 3: Compute features
     # 1) CQT chroma with 3x oversampling in pitch
@@ -269,7 +273,7 @@ def getFusedSimilarity(filename, sr, hop_length, win_fac, wins_per_block, K, reg
             reg_diag=reg_diag, reg_neighbs=reg_neighbs)
     if plot_result:
         plotFusionResults(WsDict, {}, {}, times, win_fac)
-        plt.savefig("%s_Plot.png"%filename, bbox_inches='tight')
+        plt.savefig("%s_Plot_w%i_b%i_K%i.png"%(filename, win_fac, wins_per_block, pK), bbox_inches='tight')
     return {'Ws':WsDict, 'times':times, 'K':pK}
 
 if __name__ == '__main__':
@@ -295,6 +299,6 @@ if __name__ == '__main__':
     res = getFusedSimilarity(opt.filename, sr=opt.sr, \
         hop_length=opt.hop_length, win_fac=opt.win_fac, wins_per_block=opt.wins_per_block, \
         K=opt.K, reg_diag=opt.reg_diag, reg_neighbs=opt.reg_neighbs, niters=opt.niters, \
-        do_animation=opt.do_animation, plot_result=opt.plot_result, do_crema=False)
+        do_animation=opt.do_animation, plot_result=opt.plot_result, do_crema=True)
     sio.savemat(opt.matfilename, res)
     saveResultsJSON(opt.filename, res['times'], res['Ws'], opt.neigs, opt.jsonfilename, opt.diffusion_znormalize)

@@ -89,7 +89,9 @@ def get_graph_obj(W, K=10, res = 400):
     """
     fac = 1
     if res > -1:
+        print(W.shape, res)
         fac = int(np.round(W.shape[0]/float(res)))
+        fac = fac if fac > 0 else 1
         res = int(W.shape[0]/fac)
         WRes = imresize(W, (res, res))
     else:
@@ -103,17 +105,20 @@ def get_graph_obj(W, K=10, res = 400):
     C = c(np.array(np.round(np.linspace(0, 255,res)), dtype=np.int32))
     C = np.array(np.round(C[:, 0:3]*255), dtype=int)
     colors = C.tolist()
-
-    K = min(int(np.round(K*2.0/fac)), res) # Use slightly more edges
-    print("res = %i, K = %i"%(res, K))
-    S = getS(WRes, K).tocoo()
-    I, J, V = S.row, S.col, S.data
-    V *= 10
-    ret = {}
-    ret["nodes"] = [{"id":"%i"%i, "color":colors[i]} for i in range(res)]
-    ret["links"] = [{"source":"%i"%I[i], "target":"%i"%J[i], "value":"%.3g"%V[i]} for i in range(I.shape[0])]
-    ret["fac"] = fac
-    return ret
+    
+    try:
+        K = min(int(np.round(K*2.0/fac)), res) # Use slightly more edges
+        print("res = %i, K = %i"%(res, K))
+        S = getS(WRes, K).tocoo()
+        I, J, V = S.row, S.col, S.data
+        V *= 10
+        ret = {}
+        ret["nodes"] = [{"id":"%i"%i, "color":colors[i]} for i in range(res)]
+        ret["links"] = [{"source":"%i"%I[i], "target":"%i"%J[i], "value":"%.3g"%V[i]} for i in range(I.shape[0])]
+        ret["fac"] = fac
+        return ret
+    except ValueError:
+        return {}
 
 def saveResultsJSON(filename, times, Ws, neigs, jsonfilename, diffusion_znormalize):
     """
@@ -140,7 +145,7 @@ def saveResultsJSON(filename, times, Ws, neigs, jsonfilename, diffusion_znormali
     print("Saving results...")
     #Add music as base64 files
     _, ext = os.path.splitext(filename)
-    Results['audio'] = "data:audio/%s;base64, "%ext[1::] + getBase64File(filename)
+    Results['audio'] = ""#"data:audio/%s;base64, "%ext[1::] + getBase64File(filename)
     W = Ws['Fused']
     WOut = np.array(W)
     np.fill_diagonal(WOut, 0)

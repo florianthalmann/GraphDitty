@@ -10,8 +10,9 @@ from SongStructure import *
 from SalamiExperiments import *
 model = crema.models.chord.ChordModel()
 
-def compute_crema(num):
-    filename = "%s/%i/audio.mp3"%(AUDIO_DIR, num)
+def compute_crema(audio):
+    #filename = "%s/%i/audio.mp3"%(AUDIO_DIR, num)
+    filename = audio
     print("Doing crema on %s"%filename)
     matfilename = "%s_crema.mat"%filename
     subprocess.call([FFMPEG_BINARY, "-i", filename, "-ar", "44100", "-ac", "1", "%s.wav"%filename])
@@ -29,7 +30,7 @@ def compute_all_crema(NThreads = 12):
     # Disable inconsistent hierarchy warnings
     if not sys.warnoptions:
         warnings.simplefilter("ignore")
-    songnums = [int(s) for s in os.listdir(AUDIO_DIR)]
+    songnums = [AUDIO_DIR+s for s in os.listdir(AUDIO_DIR) if s[-4:] == '.mp3']
     if NThreads > -1:
         parpool = PPool(NThreads)
         parpool.map(compute_crema, (songnums))

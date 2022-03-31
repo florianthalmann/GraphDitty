@@ -16,15 +16,16 @@ import os
 import sys
 import warnings
 import time
+import tqdm
 from CSMSSMTools import getCSM, getCSMCosine
 from Laplacian import *
 from SimilarityFusion import getW, doSimilarityFusionWs
 from SongStructure import *
-from multiprocessing import Pool as PPool
+from multiprocessing import Pool as PPool, cpu_count
 
 ## Paths to dataset
-JAMS_DIR = 'salami-data-public-jams-multi'
-AUDIO_DIR = 'salami-data-public-audio'
+JAMS_DIR = '../SALAMI/salami-data-public-jams-multi/'
+AUDIO_DIR = '../SALAMI/all-audio'
 
 ## Global fusion variables
 lapfn = getRandomWalkLaplacianEigsDense
@@ -38,6 +39,11 @@ reg_diag=1.0
 reg_neighbs=0.0
 niters=10
 neigs=10
+
+#own settings
+win_fac=-2
+wins_per_block=4
+K=10
 
 
 
@@ -96,7 +102,7 @@ def get_inter_anno_agreement(NThreads = 12):
     plt.ylabel("Probability Density")
     plt.show()
 
-def compute_features(num, multianno_only = True, recompute=False):
+def compute_features(num, multianno_only = False, recompute=True):
     """
     Compute precision, recall, and l-measure for a set of features on a particular
     song in the SALAMI dataset, and save the results to a file called "results.mat"
@@ -110,16 +116,23 @@ def compute_features(num, multianno_only = True, recompute=False):
     recompute: boolean
         Compute this again, even if "results.mat" already exists
     """
-    matfilename = "%s/%i/results.mat"%(AUDIO_DIR, num)
+    matfilename = "%s/%i_results_w%i_b%i_K%i.mat"%(AUDIO_DIR, num, win_fac, wins_per_block, K)
+    hierfilename = "%s/%i_hierarchies_w%i_b%i_K%i.mat"%(AUDIO_DIR, num, win_fac, wins_per_block, K)
     jamsfilename = "%s/%i.jams"%(JAMS_DIR, num)
-    if (not recompute) and (os.path.exists(matfilename) or (not os.path.exists(jamsfilename))):
-        print("Skipping %i because it has already been computed"%num)
+    
+    # if not os.path.exists(jamsfilename): print(num, ': NOJAMS!!!')
+    # print(num, os.path.exists(matfilename), not os.path.exists(jamsfilename))
+    
+    if (not recompute) and os.path.exists(matfilename) and os.path.exists(hierfilename):
         return
-    filename = "%s/%i/audio.mp3"%(AUDIO_DIR, num)
-    jam = jams.load(jamsfilename)    
-    if multianno_only and len(jam.annotations) < 8:
-        print("Skipping %i because there is only one annotation"%num)
-        return
+    # if (not recompute) and (os.path.exists(matfilename) or (not os.path.exists(jamsfilename))):
+    #     print("Skipping %i because it has already been computed"%num)
+    #     return
+    filename = "%s/%i.mp3"%(AUDIO_DIR, num)
+    # jam = jams.load(jamsfilename)
+    # if multianno_only and len(jam.annotations) < 8:
+    #     print("Skipping %i because there is only one annotation"%num)
+    #     return
     print("Doing %i..."%num)
 
     # Step 1: Compute feature-based similarity matrix and the matrix
@@ -130,6 +143,8 @@ def compute_features(num, multianno_only = True, recompute=False):
     if REC_SMOOTH > 0:
         for name in Ws:
             Ws[name] = df(Ws[name], size=(1, REC_SMOOTH))
+    
+    sio.savemat(matfilename, res)
 
     # Step 2: Compute Laplacian eigenvectors and perform spectral clustering
     # at different resolutions
@@ -138,10 +153,15 @@ def compute_features(num, multianno_only = True, recompute=False):
     #print("Elapsed time spectral clustering: %.3g"%(time.time()-tic))
     specintervals_hier = {name:[res['intervals_hier'] for res in alllabels[name]] for name in alllabels}
     speclabels_hier = {name:[res['labels_hier'] for res in alllabels[name]] for name in alllabels}
+    
+    sio.savemat(hierfilename, {'intervals': specintervals_hier, 'labels': speclabels_hier})
+    
+    return
 
     ## Step 3: Compare to annotators and save results
     ret = {name:[] for name in Ws}
-    for annidx in range(int(len(jam.annotations)/4)):
+    print('NUM ANNOS', len(jam.annotations), int(len(jam.annotations)/4))
+    for annidx in range(int(len(jam.annotations))):#range(int(len(jam.annotations)/4)):
         for name in alllabels:
             intervals_hier, labels_hier = jam_annos_to_lists(jam.annotations[1+annidx*3], jam.annotations[2+annidx*3])
             # Make sure the labels end at the same place (extend the spectral clustering label if necessary)
@@ -163,9 +183,9 @@ def compute_features(num, multianno_only = True, recompute=False):
     intervals_hier1, labels_hier1 = jam_annos_to_lists(jam.annotations[1], jam.annotations[2])
     fig = plotFusionResults(Ws, vs, alllabels, times, win_fac, intervals_hier1, labels_hier1)
     if win_fac > 0:
-        figpath = "%s/%i/Fusion.svg"%(AUDIO_DIR, num)
+        figpath = "%s/%i_Fusion.svg"%(AUDIO_DIR, num)
     else:
-        figpath = "%s/%i/Fusion.png"%(AUDIO_DIR, num)
+        figpath = "%s/%i_Fusion.png"%(AUDIO_DIR, num)
     print("Saving to %s"%figpath)
     plt.savefig(figpath, bbox_inches='tight')
     plt.close(fig)
@@ -187,15 +207,15 @@ def run_audio_experiments(NThreads = 12):
     # Disable inconsistent hierarchy warnings
     if not sys.warnoptions:
         warnings.simplefilter("ignore")
-    songnums = [int(s) for s in os.listdir(AUDIO_DIR)]
+    songnums = [int(s[:-4]) for s in os.listdir(AUDIO_DIR) if s[-4:] == '.mp3']
     if NThreads > -1:
-        parpool = PPool(NThreads)
-        parpool.map(compute_features, (songnums))
+        with PPool(NThreads) as pool:
+            list(tqdm.tqdm(pool.imap_unordered(compute_features, songnums), total=len(songnums), desc='SNF'))
     else:
         for num in songnums:
             compute_features(num)
 
-def aggregate_experiments_results(precomputed_name = "", multianno_only = True):
+def aggregate_experiments_results(precomputed_name = "", multianno_only = False):
     """
     Load all of the results from the SALAMI experiment and plot
     the annotator agreements
@@ -206,8 +226,8 @@ def aggregate_experiments_results(precomputed_name = "", multianno_only = True):
     idxs = [] #Indices of 
 
     if len(precomputed_name) == 0:
-        for num in [int(s) for s in os.listdir(AUDIO_DIR)]:
-            matfilename = '%s/%i/results.mat'%(AUDIO_DIR, num)
+        for num in [514,1414,386,573,1109,783,1634,845,367,1139,1120,1469,60,690,496,565,1166,818,1077,1372,39,1618,556,320,1213]:#[int(s) for s in os.listdir(AUDIO_DIR)]:
+            matfilename = '%s/%i_results.mat'%(AUDIO_DIR, num)
             if os.path.exists(matfilename):
                 res = sio.loadmat(matfilename)
                 thisnanno = 0
@@ -247,7 +267,9 @@ def aggregate_experiments_results(precomputed_name = "", multianno_only = True):
     print("Plotting statistics for %i examples"%(res['MFCCs'].shape[0]/2))
     interanno = res['interanno']
     names.remove('interanno')
-        
+    
+    print(prls['Fused'][:,2])
+    print('MEAN', np.mean(prls['Fused'][:,2]))
 
     # Step 2: Plot distribution and KS-score of feature-based agreements
     # versus inter-annotator agreements
@@ -298,5 +320,5 @@ def aggregate_experiments_results(precomputed_name = "", multianno_only = True):
 
 if __name__ == '__main__':
     #get_inter_anno_agreement()
-    #run_audio_experiments(NThreads=-1)
-    aggregate_experiments_results()
+    run_audio_experiments(NThreads=cpu_count()-2)#-1)
+    #aggregate_experiments_results()
